@@ -1,0 +1,40 @@
+parameters:
+  deployment: ''
+  displayName: ''
+  environment: ''
+  stageName: ''
+  webAppName: ''
+  dependsOn: ''
+
+stages:
+- stage: ${{ parameters.stageName }}
+  displayName: ${{ parameters.displayName }}
+  # Declare that stage depends on Build stage been executed successfully.
+  dependsOn: ${{ parameters.dependsOn }}
+  jobs:
+  - deployment: ${{ parameters.deployment }}
+    pool: 
+     # Virtual machine image that will be used in order to create required machine.
+     vmImage: 'ubuntu-latest'
+    # Environemnt to which deployment should be performed.
+    environment: ${{ parameters.environment }}
+    variables:
+      # Use variables that can be found within Secrets and Release variables group.
+    # Issue with the authorization.
+    # The required ConnectedServiceName variable value will be provided as a Pipeline variable.
+    #- group: Secrets
+    - group: TerraformConfiguration
+    strategy:
+      # Run the deployment once only.
+      runOnce:
+        deploy:
+          steps:
+
+          - task: AzureAppServiceManage@0
+            inputs:
+                azureSubscription: 'TerraformAppServiceDeployDevTestProd'
+                Action: 'Swap Slots'
+                WebAppName: $(appservicename)
+                ResourceGroupName: $(ResourceGroupName)
+                SourceSlot: $(SourceSlot)
+

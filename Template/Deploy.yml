@@ -1,0 +1,54 @@
+parameters:
+ - name: environment
+   type: string
+   default: dev
+   values:
+    - Development
+    - Canary
+    - EarlyAdapter
+    - Production
+ - name: deployment
+   type: string
+ - name: displayName
+   type: string
+ - name:  stageName
+   type: string
+ - name: webAppName
+   type: string
+ - name: dependsOn
+
+stages:
+- stage: ${{ parameters.stageName }}
+  displayName: ${{ parameters.displayName }}
+  # Declare that stage depends on Build stage been executed successfully.
+  dependsOn: ${{ parameters.dependsOn }}
+  jobs:
+  - deployment: ${{ parameters.deployment }}
+    pool: 
+     # Virtual machine image that will be used in order to create required machine.
+     vmImage: 'ubuntu-latest'
+    # Environemnt to which deployment should be performed.
+    environment: ${{ parameters.environment }}
+    variables:
+      # Use variables that can be found within Secrets and Release variables group.
+    # Issue with the authorization.
+    # The required ConnectedServiceName variable value will be provided as a Pipeline variable.
+    #- group: Secrets
+    - group: TerraformConfiguration
+    - group: BuildVariables
+    strategy:
+      # Run the deployment once only.
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureRmWebAppDeployment@4
+            # Deploy application to chosen environment.
+            displayName: ${{ parameters.displayName }}
+            inputs:
+              ConnectionType: 'AzureRM'
+              azureSubscription: 'TerraformAppServiceDeployDevTestProd'
+             # azureSubscription: '$(ConnectedServiceName)'
+              appType: 'webApp'
+              WebAppName: ${{ parameters.webAppName }}
+              Package: '$(Pipeline.Workspace)/$(artifactsName)/PartsUnlimitedWebsite.zip'
+

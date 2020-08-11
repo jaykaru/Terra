@@ -1,0 +1,69 @@
+parameters:
+ - name: environment
+   type: string
+   default: dev
+   values:
+    - Development
+    - Canary
+    - EarlyAdapter
+    - Production
+ - name: deployment
+   type: string
+ - name: displayName
+   type: string
+ - name:  stageName
+   type: string
+ - name: webAppName
+   type: string
+ - name: dependsOn
+   type: string
+ - name: deploySlotName
+   type: string
+
+stages:
+- stage: ${{ parameters.stageName }}
+  displayName: ${{ parameters.displayName }}
+  # Declare that stage depends on Build stage been executed successfully.
+  dependsOn: ${{ parameters.dependsOn }}
+  jobs:
+  - deployment: ${{ parameters.deployment }}
+    pool: 
+     # Virtual machine image that will be used in order to create required machine.
+     vmImage: 'vs2017-win2016'
+    # Environemnt to which deployment should be performed.
+    environment: ${{ parameters.environment }}
+    variables:
+      # Use variables that can be found within Secrets and Release variables group.
+    # Issue with the authorization.
+    # The required ConnectedServiceName variable value will be provided as a Pipeline variable.
+    #- group: Secrets
+    - group: TerraformConfiguration
+    - group: BuildVariables
+    strategy:
+      # Run the deployment once only.
+      runOnce:
+        deploy:
+          steps:
+
+          #- task: FileTransform@2
+          #  inputs:
+          #    folderPath: '$(Pipeline.Workspace)/TerraformDrop/PartsUnlimitedWebsit.zip'
+          #    xmlTransformationRules: '-transform **\*.config'
+          #    jsonTargetFiles: '**\*.config'
+
+          - task: AzureRmWebAppDeployment@4
+            # Deploy application to chosen environment.
+            displayName: ${{ parameters.displayName }}
+            inputs:
+              ConnectionType: 'AzureRM'
+              azureSubscription: 'TerraformAppServiceDeployDevTestProd'
+              appType: 'webApp'
+              WebAppName: '$(appservicename)'
+              deployToSlotOrASE: true
+              ResourceGroupName: '$(ResourceGroupName)'
+              SlotName: ${{ parameters.deploySlotName }}
+              Package: '$(Pipeline.Workspace)/$(artifactsName)/PartsUnlimitedWebsite.zip'
+              JSONFiles: '/config.json'
+
+
+

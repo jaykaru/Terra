@@ -1,0 +1,146 @@
+# ASP.NET Core (.NET Framework)
+# Build and test ASP.NET Core projects targeting the full .NET Framework.
+# Add steps that publish symbols, save build artifacts, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+parameters:
+- name: Image
+  displayName: PoolImage
+  type: string
+  default: vs2017-win2016
+  values:
+  - windows-latest
+  - vs2017-win2016
+  - ubuntu-latest
+
+
+
+trigger: none
+  #branches:
+    #include:
+      #- master
+  #paths:
+    #include:
+      #- '*'
+    #exclude:
+      #- Client/*
+
+stages:
+- stage: 'Build'
+  displayName: 'Build and Unit Test .NET Core application'
+  jobs:
+  - job: 'Build'
+    displayName: 'Build application'
+    pool: 
+     vmImage: ${{ parameters.image }}
+
+    variables:
+      #solution: '**/*.sln'
+      #buildPlatform: 'Any CPU'
+      #buildConfiguration: 'Release'
+    - group: BuildVariables
+
+    steps:
+
+#    - task: NuGetToolInstaller@1
+
+
+    - task: NuGetToolInstaller@1
+      inputs:
+        versionSpec: 
+        checkLatest: true
+
+    - task: NuGetCommand@2
+      inputs:
+        restoreSolution: '$(solution)'
+
+    - task: SonarCloudPrepare@1
+      inputs:
+        SonarCloud: 'TerraformSonar'
+        organization: 'asif-a-masood23944'
+        scannerMode: 'MSBuild'
+        projectKey: 'asif-a-masood23944'
+        projectName: 'AzureDevOpsAdvanced'
+
+    - task: VSBuild@1
+      inputs:
+        solution: '$(solution)'
+        msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:DesktopBuildPackageLocation="$(build.artifactStagingDirectory)\WebApp.zip" /p:DeployIisAppPath="Default Web Site"'
+        platform: '$(buildPlatform)'
+        configuration: '$(buildConfiguration)'
+
+
+    - task: SonarCloudAnalyze@1
+
+    - task: SonarCloudPublish@1
+      inputs:
+        pollingTimeoutSec: '300'
+
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: 'test'
+        projects: '**/*[Tt]ests/*.csproj'
+        arguments: '--configuration $(BuildConfiguration)'
+        testRunTitle: 'Run Unit Test'
+
+    - task: DotNetCoreCLI@2
+      displayName: Publish
+      inputs:
+        command: publish
+        publishWebProjects: True
+        arguments: '--configuration $(BuildConfiguration) --output $(build.artifactstagingdirectory)'
+        zipAfterPublish: True
+
+    - task: CopyFiles@2
+      displayName: 'Copy Terraform files to artifacts'
+      inputs:
+        SourceFolder: Terraform
+        TargetFolder: '$(build.artifactstagingdirectory)/Terraform'
+
+
+    - publish: $(Build.ArtifactStagingDirectory)
+      displayName: 'Publish build output'
+      artifact: $(artifactsName)
+
+- template: Template/TerraConfig.yml
+
+- template: Template/Deploy.yml
+  parameters:
+    deployment: 'DeployDevelopmentEnvironment'
+    dependsOn: 'TerraformConfiguration'
+    displayName: 'Deploy PartsUnlimited to development environment'
+    environment: 'Development'
+    stageName: 'Dev'
+    webAppName: '$(appservicenameDev)'
+
+- template: Template/Deploy.yml
+  parameters:
+    deployment: 'DeployCanary'
+    dependsOn: 'TerraformConfiguration'
+    displayName: 'Deploy PartsUnlimited to Canary environment'
+    environment: 'Canary'
+    stageName: 'Canary'
+    webAppName: '$(appservicenameCanary)'
+
+- template: Template/DeploytoSlot.yml
+  parameters:
+    deployment: 'DeployEarlyAdapter'
+    dependsOn: 'Canary'
+    displayName: 'Deploy PartsUnlimited to Production environment slot'
+    environment: 'EarlyAdapter'
+    stageName: 'EarlyAdapterSlot'
+    webAppName: '$(appservicenameEarlyAdaptor)'
+    deploySlotName: '$(appServiceSlotName)'
+
+- template: Template/SlotSwap.yml
+  parameters:
+    deployment: 'DeployApplication'
+    dependsOn: 'EarlyAdapterSlot'
+    displayName: 'Deploy PartsUnlimited to Production environment'
+    environment: 'Production'
+    stageName: 'ProdWestEurope'
+    webAppName: '$(appservicename)'
+
+
+
+
+
